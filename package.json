@@ -1,0 +1,24 @@
+{
+  "name": "@cc/build",
+  "version": "0.0.0",
+  "description": "CreditCloud 通用 build 工具",
+  "files": [
+    "index.js"
+  ],
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://gitlab.creditcloud.com:10081/ccfe/cc-build.git"
+  },
+  "author": "CCFE",
+  "license": "private",
+  "bugs": {
+    "url": "http://gitlab.creditcloud.com/ccfe/cc-build/issues"
+  },
+  "homepage": "http://gitlab.creditcloud.com/ccfe/cc-build",
+  "dependencies": {
+  }
+}
