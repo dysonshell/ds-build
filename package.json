@@ -19,6 +19,11 @@
     "url": "http://gitlab.creditcloud.com/ccfe/cc-build/issues"
   },
   "homepage": "http://gitlab.creditcloud.com/ccfe/cc-build",
+  "peerDependencies": {
+    "gulp": "^3.8.10"
+  },
   "dependencies": {
+    "gulp-load-plugins": "^0.8.0",
+    "stream-cache": "0.0.2"
   }
 }
