@@ -1,5 +1,5 @@
 {
-  "name": "@cc/build",
+  "name": "@ds/build",
   "version": "0.0.1",
   "description": "CreditCloud 通用 build 工具",
   "files": [
@@ -20,10 +20,24 @@
   },
   "homepage": "http://gitlab.creditcloud.com/ccfe/cc-build",
   "peerDependencies": {
+    "@ds/assets": "^0.5.0",
+    "@ds/rewriter": "^0.1.0",
     "gulp": "^3.8.10"
   },
   "dependencies": {
+    "browserify": "^8.1.1",
+    "gulp-factor-bundle": "^0.1.2",
     "gulp-load-plugins": "^0.8.0",
-    "stream-cache": "0.0.2"
+    "gulp-mq-remove": "0.0.1",
+    "gulp-rename": "^1.2.0",
+    "gulp-rev": "^3.0.0",
+    "gulp-rev-outdated": "0.0.8",
+    "gulp-rimraf": "^0.1.1",
+    "gulp-supervisor": "^0.1.2",
+    "gulp-uglify": "^1.1.0",
+    "is-running": "^1.0.5",
+    "stream-cache": "0.0.2",
+    "stream-combiner": "^0.2.1",
+    "through2": "^0.6.3"
   }
 }
