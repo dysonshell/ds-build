@@ -22,10 +22,13 @@
   "peerDependencies": {
     "@ds/assets": "^0.5.0",
     "@ds/rewriter": "^0.1.0",
+    "@ds/watchify": "^0.2.0",
     "gulp": "^3.8.10"
   },
   "dependencies": {
+    "@ds/rewrite-component-source": "^0.1.1",
     "browserify": "^8.1.1",
+    "event-stream": "^3.2.1",
     "gulp-factor-bundle": "^0.1.2",
     "gulp-load-plugins": "^0.8.0",
     "gulp-mq-remove": "0.0.1",
@@ -38,6 +41,7 @@
     "is-running": "^1.0.5",
     "stream-cache": "0.0.2",
     "stream-combiner": "^0.2.1",
-    "through2": "^0.6.3"
+    "through2": "^0.6.3",
+    "xtend": "^4.0.0"
   }
 }

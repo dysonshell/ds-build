@@ -4,19 +4,21 @@ var path = require('path');
 var $ = require('gulp-load-plugins')();
 var bpack = require('browserify/node_modules/browser-pack');
 var dsAssets = require('@ds/assets');
-var assign = require('lodash-node/modern/objects/assign');
+var xtend = require('xtend');
 var through = require('through2');
 var es = require('event-stream');
 var streamCombine = require('stream-combiner');
 var rewriter = require('@ds/rewriter');
+var watchify = require('@ds/watchify');
 var exec = require('child_process')
     .exec;
 var spawn = require('child_process')
     .spawn;
 
-module.exports = function (gulp, config, watchify, appRoot) {
+module.exports = function (gulp, opts) {
 
-var port = parseInt(process.env.PORT, 10) || config.port;
+var appRoot = opts.appRoot;
+var port = parseInt(process.env.PORT, 10) || opts.port;
 
 function rewrite(revMap) {
     return through.obj(function (obj, enc, cb) {
@@ -31,7 +33,7 @@ function src(glob, opts) {
     var xopts = {
         cwd: appRoot
     };
-    opts = opts ? assign({}, xopts, opts) : xopts;
+    opts = opts ? xtend(xopts, opts) : xopts;
     return gulp.src.call(gulp, glob, opts);
 }
 
@@ -125,7 +127,7 @@ gulp.task('build-js', ['build-css'], function () {
         .pipe($.factorBundle({
             alterPipeline: function alterPipeline(pipeline, b) {
                 pipeline.get('pack')
-                    .splice(0, 1, bpack(assign({}, b._options, {
+                    .splice(0, 1, bpack(xtend(b._options, {
                         raw: true,
                         hasExports: false,
                         prelude: bcp
@@ -152,7 +154,7 @@ gulp.task('build-js', ['build-css'], function () {
 });
 
 function getAllRevManifest() {
-    return assign({},
+    return xtend(
         JSON.parse(fs.readFileSync(path.join(appRoot, 'dist',
             'assets-rev.json'), 'utf-8')),
         JSON.parse(fs.readFileSync(path.join(appRoot, 'dist',
@@ -203,7 +205,7 @@ function reload() {
         console.log('pm master is not running. spawning one...');
         spawn(process.execPath, [path.join(appRoot, 'master.js')], {
             cwd: appRoot,
-            env: assign({}, process.env, {
+            env: xtend(process.env, {
                 NODE_ENV: 'production'
             }),
             silent: true,
@@ -228,17 +230,7 @@ gulp
     });
 
 gulp.task('dev', function () {
-    var watchifyMiddleware = watchify.middleware();
-    var watchifyApp = require('express')();
-    watchifyApp.set('etag', false);
-    watchifyApp.use(require('morgan')());
-    watchifyApp.use(watchifyMiddleware);
-    watchifyApp.listen(port + 1000, function () {
-        console.log("watchify listening at http://127.0.0.1:%d",
-            this.address()
-            .port);
-    });
-
+    watchify(opts).listen();
     $.supervisor(path.join(appRoot, 'index.js'), {
         ext: ['json', 'js'],
         args: ['--run-by-gulp'],
