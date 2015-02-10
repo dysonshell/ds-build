@@ -63,6 +63,7 @@ module.exports = function (gulp, opts) {
                 cb();
             }),
             $.rev.manifest('rev.json', {
+                path: path.join(appRoot, 'dist', 'rev.json'),
                 base: path.join(appRoot, 'dist'),
                 cwd: appRoot,
                 merge: true
