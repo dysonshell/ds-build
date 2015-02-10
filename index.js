@@ -55,6 +55,7 @@ module.exports = function (gulp, opts) {
     }
 
     function tDest(type, prefix) {
+        var fullRevPath = path.join(appRoot, 'dist', 'rev.json');
         return streamCombine(
             dest('dist'), // write revisioned assets to /dist
             through.obj(function (obj, enc, cb) {
@@ -62,8 +63,8 @@ module.exports = function (gulp, opts) {
                 this.push(obj);
                 cb();
             }),
-            $.rev.manifest('rev.json', {
-                path: path.join(appRoot, 'dist', 'rev.json'),
+            $.rev.manifest(fullRevPath, {
+                path: fullRevPath,
                 base: path.join(appRoot, 'dist'),
                 cwd: appRoot,
                 merge: true
