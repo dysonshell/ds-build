@@ -115,6 +115,11 @@ module.exports = function (gulp, opts) {
         return es.merge(
             sCss(),
             sCss()
+            .pipe(through.obj(function (file, enc, done) {
+                console.log('trying to remove media-queries for: ' + file.path);
+                this.push(file);
+                done();
+            }))
             .pipe($.mqRemove({
                 width: '1024px'
             }))
@@ -136,6 +141,11 @@ module.exports = function (gulp, opts) {
             ], {
                 base: appRoot
             })
+            .pipe(through.obj(function (file, enc, done) {
+                console.log('trying to browserify js file: ' + file.path);
+                this.push(file);
+                done();
+            }))
             .pipe($.factorBundle({
                 alterPipeline: function alterPipeline(pipeline, b) {
                     pipeline.get('pack')
@@ -151,6 +161,11 @@ module.exports = function (gulp, opts) {
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot,
                 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev('node_modules'))
+            .pipe(through.obj(function (file, enc, done) {
+                console.log('trying to uglify js file: ' + file.path);
+                this.push(file);
+                done();
+            }))
             .pipe($.uglify({
                 compress: {
                     drop_console: true
