@@ -2,13 +2,14 @@
 var fs = require('fs');
 var path = require('path');
 var $ = require('gulp-load-plugins')();
-var bpack = require('browserify/node_modules/browser-pack');
+var bpack = require('browser-pack');
 var dsAssets = require('@ds/assets');
 var xtend = require('xtend');
 var through = require('through2');
 var es = require('event-stream');
 var streamCombine = require('stream-combiner');
 var dsRewriter = require('@ds/rewriter');
+var cccglob = require('@ds/cccglob');
 var dsWatchify = require('@ds/watchify');
 var del = require('del');
 var vinylPaths = require('vinyl-paths');
@@ -17,6 +18,9 @@ var exec = require('child_process').exec;
 module.exports = function (gulp, opts) {
 
     var appRoot = opts.appRoot;
+    GLOBAL.APP_ROOT = appRoot;
+    require('@ds/nrequire');
+    require('@ds/brequire');
     var port = parseInt(process.env.PORT, 10) || opts.port;
 
     function rewrite(revMap) {
@@ -52,7 +56,7 @@ module.exports = function (gulp, opts) {
         );
     }
 
-    function tDest(type, prefix) {
+    function tDest() {
         var fullRevPath = path.join(appRoot, 'dist', 'rev.json');
         return streamCombine(
             dest('dist'), // write revisioned assets to /dist
@@ -90,15 +94,15 @@ module.exports = function (gulp, opts) {
     }
     function tReplaceTmp() {
         return through.obj(function (file, enc, done) {
-            file.base = file.base.replace('/__tmp__', '/ccc');
-            file.path = file.path.replace('/__tmp__', '/ccc');
+            file.base = file.base.replace('/__tmp__/', '/');
+            file.path = file.path.replace('/__tmp__/', '/');
             this.push(file);
             done();
         });
     }
 
     gulp.task('prepare-tmp', function (cb) {
-        exec('rm -rf dist__tmp__/ && cp -r node_modules/@ccc __tmp__ && cp -r ccc/* __tmp__/', {
+        exec('rm -rf __tmp__/ && mkdir -p dist __tmp__/ccc && ln -s ../node_modules ../dist __tmp__ && cp -r node_modules/@ccc/* __tmp__/ccc/ && cp -r ccc/* __tmp__/ccc/', {
             cwd: appRoot
         }, cb)
     });
@@ -111,10 +115,10 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('build-assets', ['reset-rev-menifest', 'prepare-tmp'], function () {
-        return src('./__tmp__/*/img/**/*.*')
+        return gulp.src('./ccc/*/img/**/*.*', {cwd: path.join(appRoot, '__tmp__')})
             .pipe(tReplaceTmp())
             .pipe(tRev())
-            .pipe(tDest('assets'));
+            .pipe(tDest());
     });
 
     function sCss() {
@@ -157,37 +161,61 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('build-js', ['build-css'], function () {
-        var bcp = fs.readFileSync(require.resolve(
-            'browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
-        return es.merge(src(['./node_modules/assets/js/main/**/*.js',
-                './node_modules/ccc/*/js/main/**/*.js'
-            ], {
-                base: appRoot
-            })
-            .pipe(through.obj(function (file, enc, done) {
-                console.log('trying to browserify js file: ' + file.path);
-                this.push(file);
-                done();
-            }))
-            .pipe($.factorBundle({
-                alterPipeline: function alterPipeline(pipeline, b) {
-                    pipeline.get('pack')
-                        .splice(0, 1, bpack(xtend(b._options, {
-                            raw: true,
-                            hasExports: false,
-                            prelude: bcp
-                        })));
-                },
-                basedir: appRoot,
-                commonJsPath: 'node_modules/assets/js/common/global.js' //"node_modules" will be removed
-            })), src(['node_modules/assets/js/**/*.js', '!**/js/main/**']))
+        var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.js'), 'utf-8');
+        var files = cccglob.sync('ccc/*/js/main/**/*.js').map(require.resolve);
+        console.log(files);
+        return es.merge(
+            src(files)
+                .pipe(through.obj(function (file, enc, done) {
+                    console.log('trying to browserify js file: ' + file.path);
+                    console.log(file.base);
+                    file.base = file.base.replace(/\/ccc\/?$/, '/');
+                    console.log(file.base);
+                    this.push(file);
+                    done();
+                }))
+                .pipe($.factorBundle({
+                    alterPipeline: function alterPipeline(pipeline, b) {
+                        pipeline.get('pack')
+                            .splice(0, 1, bpack(xtend(b._options, {
+                                raw: true,
+                                hasExports: false,
+                                prelude: bcp
+                            })));
+                    },
+                    basedir: appRoot,
+                    commonJsPath: 'ccc/global.js' //"node_modules" will be removed
+                }))
+                .pipe(through.obj(function (file, enc, done) {
+                    console.log('1: ' + file.path);
+                    console.log(file.base);
+                    this.push(file);
+                    done();
+                }))
+                //.pipe(tReplaceTmp())
+                .pipe(tReplaceCcc())//,
+            //src([
+                //'./node_modules/@ccc/js/main/**/*.js',
+                //'./ccc/*/js/main/**/*.js',
+                //'!**/js/main/**'
+            //]).pipe(tReplaceCcc())
+        )
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
-            .pipe(tRev('node_modules'))
             .pipe(through.obj(function (file, enc, done) {
-                console.log('trying to uglify js file: ' + file.path);
+                console.log('before trev: ' + file.path);
+                console.log('before trev: ' + file.base);
                 this.push(file);
                 done();
             }))
+            .pipe(tRev())
+            .pipe(through.obj(function (file, enc, done) {
+                console.log('after rev: ' + file.path);
+                file.bash = appRoot;
+                console.log(file.base);
+                this.push(file);
+                done();
+            }))
+            /*
             .pipe($.uglify({
                 compress: {
                     drop_console: true
@@ -197,6 +225,7 @@ module.exports = function (gulp, opts) {
                     quote_keys: true
                 }
             }))
+            */
             .pipe(tDest('js', 'node_modules'));
     });
 

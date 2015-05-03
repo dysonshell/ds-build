@@ -27,13 +27,19 @@
   },
   "dependencies": {
     "@ds/assets": "^1.1.0",
+    "@ds/brequire": "^1.1.1",
+    "@ds/cccglob": "^3.0.0",
+    "@ds/common": "^3.0.4",
+    "@ds/nrequire": "^1.2.0",
     "@ds/watchify": "^1.1.0",
+    "browser-pack": "^4.0.2",
     "browserify": "^10.0.0",
+    "browserify-common-prelude": "^0.3.0",
     "co": "^4.5.2",
     "del": "^1.1.1",
     "event-stream": "^3.2.1",
     "gulp": "^3.8.11",
-    "gulp-factor-bundle": "^0.1.2",
+    "gulp-factor-bundle": "^0.1.3",
     "gulp-file": "^0.2.0",
     "gulp-load-plugins": "^0.8.0",
     "gulp-mq-remove": "0.0.1",
@@ -48,5 +54,8 @@
     "through2": "^0.6.3",
     "vinyl-paths": "^1.0.0",
     "xtend": "^4.0.0"
+  },
+  "devDependencies": {
+    "serve-static": "^1.9.2"
   }
 }
