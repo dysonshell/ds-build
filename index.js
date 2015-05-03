@@ -161,16 +161,13 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('build-js', ['build-css'], function () {
-        var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.js'), 'utf-8');
+        var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
         var files = cccglob.sync('ccc/*/js/main/**/*.js').map(require.resolve);
-        console.log(files);
+        var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/browser.js'), 'utf8');
         return es.merge(
             src(files)
                 .pipe(through.obj(function (file, enc, done) {
                     console.log('trying to browserify js file: ' + file.path);
-                    console.log(file.base);
-                    file.base = file.base.replace(/\/ccc\/?$/, '/');
-                    console.log(file.base);
                     this.push(file);
                     done();
                 }))
@@ -186,46 +183,45 @@ module.exports = function (gulp, opts) {
                     basedir: appRoot,
                     commonJsPath: 'ccc/global.js' //"node_modules" will be removed
                 }))
+                .pipe(tReplaceCcc())
                 .pipe(through.obj(function (file, enc, done) {
-                    console.log('1: ' + file.path);
-                    console.log(file.base);
+                    if (file.path === path.join(appRoot, 'ccc/global.js')) {
+                        var contents = file.contents.toString('utf8');
+                        file.contents = new Buffer(globalJsSrc.replace('/*FACTOR_BUNDLE_HERE*/', contents));
+                    }
+                    this.push(file);
+                    done();
+                })),
+            src([
+                './node_modules/@ccc/*/js/**/*.js',
+                './ccc/*/js/**/*.js',
+                '!**/js/main/**'
+            ])
+                .pipe(tReplaceCcc())
+                .pipe(through.obj(function (file, enc, done) {
+                    console.log('copying non-browserified js: ' + file.path);
+                    console.log(file.contents);
+                    file.contents = new Buffer(bcp + '; BCP.QAS(function () { ' + file.contents.toString('utf8') + '});');
                     this.push(file);
                     done();
                 }))
-                //.pipe(tReplaceTmp())
-                .pipe(tReplaceCcc())//,
-            //src([
-                //'./node_modules/@ccc/js/main/**/*.js',
-                //'./ccc/*/js/main/**/*.js',
-                //'!**/js/main/**'
-            //]).pipe(tReplaceCcc())
         )
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
-            .pipe(through.obj(function (file, enc, done) {
-                console.log('before trev: ' + file.path);
-                console.log('before trev: ' + file.base);
-                this.push(file);
-                done();
-            }))
             .pipe(tRev())
             .pipe(through.obj(function (file, enc, done) {
-                console.log('after rev: ' + file.path);
-                file.bash = appRoot;
-                console.log(file.base);
+                console.log('trying to uglify js file: ' + file.path);
                 this.push(file);
                 done();
             }))
-            /*
             .pipe($.uglify({
                 compress: {
-                    drop_console: true
+                    //drop_console: true
                 },
                 output: {
                     ascii_only: true,
                     quote_keys: true
                 }
             }))
-            */
             .pipe(tDest('js', 'node_modules'));
     });
 
