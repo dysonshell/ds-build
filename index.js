@@ -8,12 +8,11 @@ var xtend = require('xtend');
 var through = require('through2');
 var es = require('event-stream');
 var streamCombine = require('stream-combiner');
-var rewriter = require('@ds/rewriter');
-var watchify = require('@ds/watchify');
-var exec = require('child_process')
-    .exec;
-var spawn = require('child_process')
-    .spawn;
+var dsRewriter = require('@ds/rewriter');
+var dsWatchify = require('@ds/watchify');
+var del = require('del');
+var vinylPaths = require('vinyl-paths');
+var exec = require('child_process').exec;
 
 module.exports = function (gulp, opts) {
 
@@ -22,8 +21,7 @@ module.exports = function (gulp, opts) {
 
     function rewrite(revMap) {
         return through.obj(function (obj, enc, cb) {
-            obj.contents = new Buffer(rewriter(revMap, obj.contents.toString(
-                'utf-8')));
+            obj.contents = new Buffer(dsRewriter(revMap, obj.contents.toString('utf-8')));
             this.push(obj);
             cb();
         });
@@ -78,6 +76,33 @@ module.exports = function (gulp, opts) {
         );
     }
 
+    gulp.task('clean-tmp', function (cb) {
+        del('__tmp__/', {cwd: appRoot}, cb);
+    });
+
+    function tReplaceCcc() {
+        return through.obj(function (file, enc, done) {
+            file.base = file.base.replace('/node_modules/@ccc', '/ccc');
+            file.path = file.path.replace('/node_modules/@ccc', '/ccc');
+            this.push(file);
+            done();
+        });
+    }
+    function tReplaceTmp() {
+        return through.obj(function (file, enc, done) {
+            file.base = file.base.replace('/__tmp__', '/ccc');
+            file.path = file.path.replace('/__tmp__', '/ccc');
+            this.push(file);
+            done();
+        });
+    }
+
+    gulp.task('prepare-tmp', function (cb) {
+        exec('rm -rf dist__tmp__/ && cp -r node_modules/@ccc __tmp__ && cp -r ccc/* __tmp__/', {
+            cwd: appRoot
+        }, cb)
+    });
+
     gulp.task('reset-rev-menifest', function () {
         var stream = $.file('rev.json', '{}');
         var d = stream.pipe(dest('dist'));
@@ -85,50 +110,48 @@ module.exports = function (gulp, opts) {
         return d;
     });
 
-    gulp.task('build-assets', ['reset-rev-menifest'], function () {
-        return src(['./assets/img/**/*.*', './ccc/*/img/**/*.*'])
+    gulp.task('build-assets', ['reset-rev-menifest', 'prepare-tmp'], function () {
+        return src('./__tmp__/*/img/**/*.*')
+            .pipe(tReplaceTmp())
             .pipe(tRev())
             .pipe(tDest('assets'));
     });
 
     function sCss() {
         return es.merge(
-            src(['./assets/css/**/*.css', './ccc/*/css/**/*.css']),
-            src(['./assets/css/**/*.less', './ccc/*/css/**/*.less'], {
-                read: false
-            })
-            .pipe(through.obj(function (file, enc, done) {
-                dsAssets.renderLess(file.path, {
-                    componentsDirName: 'ccc',
-                    appRoot: appRoot
-                }, function (css) {
-                    file.contents = new Buffer(css);
-                    file.path = file.path.replace(/\.less$/,
-                        '.css');
-                    this.push(file);
-                    done();
-                }.bind(this));
-            })));
+            src(['./node_modules/@ccc/*/css/**/*.css', './ccc/*/css/**/*.css']).pipe(tReplaceCcc()),
+            src('./ccc/*/css/**/*.less', { read: false })
+                .pipe(through.obj(function (file, enc, done) {
+                    dsAssets.renderLess(file.path, {
+                        appRoot: appRoot
+                    }, function (css) {
+                        file.contents = new Buffer(css);
+                        file.path = file.path.replace(/\.less$/, '.css');
+                        this.push(file);
+                        done();
+                    }.bind(this));
+                }))
+        );
     }
 
     gulp.task('build-css', ['build-assets'], function () {
         return es.merge(
             sCss(),
             sCss()
-            .pipe(through.obj(function (file, enc, done) {
-                console.log('trying to remove media-queries for: ' + file.path);
-                this.push(file);
-                done();
-            }))
-            .pipe($.mqRemove({
-                width: '1024px'
-            }))
-            .pipe($.rename({
-                suffix: '.nmq',
-                extname: '.css'
-            })))
-            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot,
-                'dist', 'rev.json'), 'utf-8')), '/assets/'))
+                .pipe(through.obj(function (file, enc, done) {
+                    console.log('trying to remove media-queries for: ' + file.path);
+                    this.push(file);
+                    done();
+                }))
+                .pipe($.mqRemove({
+                    width: '1024px'
+                }))
+                .pipe($.rename({
+                    suffix: '.nmq',
+                    extname: '.css'
+                }))
+        )
+            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
             .pipe(tDest('css'));
     });
@@ -158,8 +181,7 @@ module.exports = function (gulp, opts) {
                 basedir: appRoot,
                 commonJsPath: 'node_modules/assets/js/common/global.js' //"node_modules" will be removed
             })), src(['node_modules/assets/js/**/*.js', '!**/js/main/**']))
-            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot,
-                'dist', 'rev.json'), 'utf-8'))))
+            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev('node_modules'))
             .pipe(through.obj(function (file, enc, done) {
                 console.log('trying to uglify js file: ' + file.path);
@@ -183,63 +205,11 @@ module.exports = function (gulp, opts) {
     gulp.task('build-and-clean', ['build'], function () {
         return src('./dist/**/*')
             .pipe($.revOutdated(3))
-            .pipe($.rimraf());
+            .pipe(vinylPaths(del));
     });
 
-    /* isMasterRunning
-     * 判断 pm master 是否正在运行
-     * 在运行，返回 pid(string)
-     * 不在运行，返回 false
-     */
-    function isMasterRunning() {
-        var pidFilePath = path.join(appRoot, 'ds.pid');
-        var strpid;
-        var isRunning;
-        if (fs.existsSync(pidFilePath)) {
-            strpid = fs.readFileSync(pidFilePath, 'utf-8');
-            isRunning = require('is-running')(parseInt(strpid, 10));
-        }
-        if (isRunning) {
-            return strpid;
-        }
-        return false;
-    }
-
-    function reload() {
-        var strpid = isMasterRunning();
-        if (strpid) {
-            console.log('pm master is running. sending USR1 signal...');
-            exec('kill -s USR1 ' + strpid);
-        } else {
-            console.log('pm master is not running. spawning one...');
-            spawn(process.execPath, [path.join(appRoot, 'master.js')], {
-                cwd: appRoot,
-                env: xtend(process.env, {
-                    NODE_ENV: 'production'
-                }),
-                silent: true,
-                detached: true,
-                stdio: ['ignore', 'ignore', 'ignore']
-            })
-                .unref();
-        }
-    }
-
-    gulp.task('start', ['build-and-clean'], reload);
-    gulp.task('reload', reload);
-    gulp
-        .task('stop', function () {
-            var strpid = isMasterRunning();
-            if (strpid) {
-                console.log('pm master is running. terminating...');
-                exec('kill -s TERM ' + strpid);
-            } else {
-                console.log('pm master is not running. exiting...');
-            }
-        });
-
     gulp.task('dev', function () {
-        watchify(opts).listen();
+        dsWatchify(opts).listen();
         $.supervisor(path.join(appRoot, 'index.js'), {
             ext: ['json', 'js'],
             args: ['--run-by-gulp'],
