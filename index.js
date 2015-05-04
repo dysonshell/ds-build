@@ -14,6 +14,7 @@ var dsWatchify = require('@ds/watchify');
 var del = require('del');
 var vinylPaths = require('vinyl-paths');
 var exec = require('child_process').exec;
+var mqRemove = require('mq-remove');
 
 module.exports = function (gulp, opts) {
 
@@ -147,9 +148,14 @@ module.exports = function (gulp, opts) {
                     this.push(file);
                     done();
                 }))
-                .pipe($.mqRemove({
-                    width: '1024px'
+                .pipe(through.obj(function (file, enc, done) {
+                    file.contents = new Buffer(mqRemove(file.contents.toString('utf8'), {
+                        width: '1024px'
+                    }));
+                    this.push(file);
+                    done();
                 }))
+                .pipe($.minifyCss({compatibility: 'ie8'}))
                 .pipe($.rename({
                     suffix: '.nmq',
                     extname: '.css'
