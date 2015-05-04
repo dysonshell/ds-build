@@ -169,7 +169,7 @@ module.exports = function (gulp, opts) {
     gulp.task('build-js', ['build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
         var files = cccglob.sync('ccc/*/js/main/**/*.js').map(require.resolve);
-        var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/browser.js'), 'utf8');
+        var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/ccc/global.js'), 'utf8');
         return es.merge(
             src(files)
                 .pipe(through.obj(function (file, enc, done) {
@@ -193,7 +193,7 @@ module.exports = function (gulp, opts) {
                 .pipe(through.obj(function (file, enc, done) {
                     if (file.path === path.join(appRoot, 'ccc/global.js')) {
                         var contents = file.contents.toString('utf8');
-                        file.contents = new Buffer(globalJsSrc.replace('/*FACTOR_BUNDLE_HERE*/', contents));
+                        file.contents = new Buffer(globalJsSrc.replace('"FACTOR_BUNDLE_HERE"', contents));
                     }
                     this.push(file);
                     done();
