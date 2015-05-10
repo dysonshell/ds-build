@@ -81,10 +81,6 @@ module.exports = function (gulp, opts) {
         );
     }
 
-    gulp.task('clean-tmp', function (cb) {
-        del('__tmp__/', {cwd: appRoot}, cb);
-    });
-
     function tReplaceCcc() {
         return through.obj(function (file, enc, done) {
             file.base = file.base.replace('/node_modules/@ccc', '/ccc');
@@ -93,20 +89,6 @@ module.exports = function (gulp, opts) {
             done();
         });
     }
-    function tReplaceTmp() {
-        return through.obj(function (file, enc, done) {
-            file.base = file.base.replace('/__tmp__/', '/');
-            file.path = file.path.replace('/__tmp__/', '/');
-            this.push(file);
-            done();
-        });
-    }
-
-    gulp.task('prepare-tmp', function (cb) {
-        exec('rm -rf __tmp__/ && mkdir -p dist __tmp__/ccc && ln -s ../node_modules ../dist __tmp__ && cp -r node_modules/@ccc/* __tmp__/ccc/ && cp -r ccc/* __tmp__/ccc/', {
-            cwd: appRoot
-        }, cb)
-    });
 
     gulp.task('reset-rev-menifest', function () {
         var stream = $.file('rev.json', '{}');
@@ -115,9 +97,9 @@ module.exports = function (gulp, opts) {
         return d;
     });
 
-    gulp.task('build-assets', ['reset-rev-menifest', 'prepare-tmp'], function () {
-        return gulp.src('./ccc/*/img/**/*.*', {cwd: path.join(appRoot, '__tmp__')})
-            .pipe(tReplaceTmp())
+    gulp.task('build-assets', ['reset-rev-menifest'], function () {
+        return src(['./node_modules/@ccc/*/img/**/*', './ccc/*/img/**/*'])
+            .pipe(tReplaceCcc())
             .pipe(tRev())
             .pipe(tDest());
     });
@@ -222,7 +204,7 @@ module.exports = function (gulp, opts) {
 
     gulp.task('build-and-clean', ['build'], function () {
         return src('./dist/**/*')
-            .pipe($.revOutdated(3))
+            .pipe($.revOutdated(5))
             .pipe(vinylPaths(del));
     });
 
