@@ -123,20 +123,7 @@ module.exports = function (gulp, opts) {
     });
 
     function sCss() {
-        return es.merge(
-            src(['./node_modules/@ccc/*/css/**/*.css', './ccc/*/css/**/*.css']).pipe(tReplaceCcc()),
-            src('./ccc/*/css/**/*.less', { read: false })
-                .pipe(through.obj(function (file, enc, done) {
-                    dsAssets.renderLess(file.path, {
-                        appRoot: appRoot
-                    }, function (css) {
-                        file.contents = new Buffer(css);
-                        file.path = file.path.replace(/\.less$/, '.css');
-                        this.push(file);
-                        done();
-                    }.bind(this));
-                }))
-        );
+        return src(['./node_modules/@ccc/*/css/**/*.css', './ccc/*/css/**/*.css']).pipe(tReplaceCcc());
     }
 
     gulp.task('build-css', ['build-assets'], function () {
