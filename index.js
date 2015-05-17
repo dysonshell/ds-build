@@ -15,6 +15,9 @@ var del = require('del');
 var vinylPaths = require('vinyl-paths');
 var exec = require('child_process').exec;
 var mqRemove = require('mq-remove');
+var browserify = require('browserify');
+var partialify = require('partialify');
+var es3ify = require('es3ify');
 
 module.exports = function (gulp, opts) {
 
@@ -147,7 +150,20 @@ module.exports = function (gulp, opts) {
                     done();
                 }))
                 .pipe($.factorBundle({
+                    b: (function() {
+                        var b = new browserify();
+                        b.on('reset', function () {
+                            if (!b.transformPatched) {
+                                b.transform(partialify).transform(es3ify);
+                                b.transformPatched = true;
+                            }
+                        });
+                    }()),
                     alterPipeline: function alterPipeline(pipeline, b) {
+                        if (!b.transformPatched) {
+                            b.transform(partialify).transform(es3ify);
+                            b.transformPatched = true;
+                        }
                         pipeline.get('pack')
                             .splice(0, 1, bpack(xtend(b._options, {
                                 raw: true,
