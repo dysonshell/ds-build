@@ -29,7 +29,7 @@
     "@ds/assets": "^2.0.0",
     "@ds/brequire": "^1.1.1",
     "@ds/cccglob": "^3.0.0",
-    "@ds/common": "^3.0.7",
+    "@ds/common": ">=3 <6",
     "@ds/nrequire": "^1.2.0",
     "@ds/rewriter": "^0.1.0",
     "@ds/watchify": "^1.4.0",
