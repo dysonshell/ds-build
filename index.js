@@ -178,7 +178,7 @@ module.exports = function (gulp, opts) {
                 .pipe(through.obj(function (file, enc, done) {
                     if (file.path === path.join(appRoot, 'ccc/global.js')) {
                         var contents = file.contents.toString('utf8');
-                        file.contents = new Buffer(globalJsSrc.replace('"FACTOR_BUNDLE_HERE"', contents));
+                        file.contents = new Buffer(globalJsSrc + contents);
                     }
                     this.push(file);
                     done();
