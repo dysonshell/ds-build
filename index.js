@@ -229,7 +229,7 @@ module.exports = function (gulp, opts) {
         $.supervisor(path.join(appRoot, 'index.js'), {
             ext: ['json', 'js'],
             args: ['--run-by-gulp'],
-            ignore: ['node_modules', 'assets']
+            watch: ['config', 'index.js'] // 其他所有文件都会在改动后 process.exit(0); 这样触发重启
         });
     });
 
