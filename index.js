@@ -17,7 +17,9 @@ var exec = require('child_process').exec;
 var mqRemove = require('mq-remove');
 var browserify = require('browserify');
 var partialify = require('partialify');
-var es3ify = require('es3ify');
+var es3ify = require('es3ify-safe');
+var semver = require('semver');
+var dsWatchifyVersion = require('@ds/watchify/package.json').version;
 
 module.exports = function (gulp, opts) {
 
@@ -25,7 +27,9 @@ module.exports = function (gulp, opts) {
     GLOBAL.APP_ROOT = appRoot;
     require('@ds/nrequire');
     require('@ds/brequire');
-    var port = parseInt(process.env.PORT, 10) || opts.port;
+    var port = Number(process.env.PORT || opts.port);
+    process.env.APP_ROOT = appRoot;
+    process.env.PORT = port;
 
     function rewrite(revMap) {
         return through.obj(function (obj, enc, cb) {
@@ -225,12 +229,25 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('dev', function () {
-        dsWatchify(opts).listen();
-        $.supervisor(path.join(appRoot, 'index.js'), {
+        if (semver.gt(dsWatchifyVersion, '1.8.0')) {
+            var watchifyPath = require.resolve('@ds/watchify');
+            $.supervisor(watchifyPath, {
+                watch: [watchifyPath],
+            });
+        } else {
+            dsWatchify(opts).listen();
+        }
+        var supervisorOptions = {
             ext: ['json', 'js'],
             args: ['--run-by-gulp'],
-            watch: ['config', 'index.js'] // 其他所有文件都会在改动后 process.exit(0); 这样触发重启
-        });
+        }
+        if (require('@ds/nrequire').watchRequiredFilesToRestarte) {
+            supervisor.watch = ['config', 'index.js'];
+            // 其他所有文件都会在改动后 process.exit(0); 这样触发重启
+        } else {
+            supervisorOptions.ignore = ['node_modules', 'assets'];
+        }
+        $.supervisor(path.join(appRoot, 'index.js'), supervisorOptions);
     });
 
 };
