@@ -230,10 +230,16 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('dev', function () {
-        if (semver.gt(dsWatchifyVersion, '1.8.0')) {
-            var watchifyPath = require.resolve('@ds/watchify');
-            $.supervisor(watchifyPath, {
-                watch: [watchifyPath],
+        var watchifyServerPath;
+        try {
+            watchifyServerPath = require.resolve('@ds/watchify/server.js');
+        } catch (e) {}
+        if (watchifyServerPath) {
+            var rpath = path.relative(appRoot, require.resolve('@ds/watchify/server.js'));
+            $.supervisor(watchifyServerPath, {
+                cwd: path.dirname(watchifyServerPath),
+                ext: ['js'],
+                watch: [rpath],
             });
         } else {
             dsWatchify(opts).listen();
