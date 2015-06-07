@@ -196,7 +196,6 @@ module.exports = function (gulp, opts) {
                 .pipe(tReplaceCcc())
                 .pipe(through.obj(function (file, enc, done) {
                     console.log('copying non-browserified js: ' + file.path);
-                    console.log(file.contents);
                     file.contents = new Buffer(bcp + '; BCP.QAS(function () { ' + file.contents.toString('utf8') + '});');
                     this.push(file);
                     done();
