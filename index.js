@@ -20,6 +20,7 @@ var partialify = require('partialify');
 var es3ify = require('es3ify-safe');
 var semver = require('semver');
 var dsWatchifyVersion = require('@ds/watchify/package.json').version;
+var dsNrequireVersion = require('@ds/nrequire/package.json').version;
 
 module.exports = function (gulp, opts) {
 
@@ -241,8 +242,8 @@ module.exports = function (gulp, opts) {
             ext: ['json', 'js'],
             args: ['--run-by-gulp'],
         }
-        if (require('@ds/nrequire').watchRequiredFilesToRestarte) {
-            supervisor.watch = ['config', 'index.js'];
+        if (semver.gte(dsNrequireVersion, '1.3.0')) {
+            supervisorOptions.watch = ['config', 'index.js'];
             // 其他所有文件都会在改动后 process.exit(0); 这样触发重启
         } else {
             supervisorOptions.ignore = ['node_modules', 'assets'];
