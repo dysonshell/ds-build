@@ -1,6 +1,6 @@
 {
   "name": "@ds/build",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "CreditCloud 通用 build 工具",
   "files": [
     "index.js"
