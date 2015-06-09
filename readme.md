@@ -18,3 +18,5 @@ require('@ds/build')(gulp, {
 之后这个 gulpfile.js 可以添加当前项目特定的任务（如果有的话）。
 
 2.0.0 起，不再做 less 的编译处理，详见 `@ds/assets` 的文档。
+
+4.0.0 起，不再改变非 `main/` 目录下的 jx 文件，详见 `@ds/watchify` 文档。
