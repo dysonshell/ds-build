@@ -194,12 +194,6 @@ module.exports = function (gulp, opts) {
                 '!**/js/main/**'
             ])
                 .pipe(tReplaceCcc())
-                .pipe(through.obj(function (file, enc, done) {
-                    console.log('copying non-browserified js: ' + file.path);
-                    file.contents = new Buffer(bcp + '; BCP.QAS(function () { ' + file.contents.toString('utf8') + '});');
-                    this.push(file);
-                    done();
-                }))
         )
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
