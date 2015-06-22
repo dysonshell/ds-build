@@ -31,6 +31,7 @@ module.exports = function (gulp, opts) {
     var port = Number(process.env.PORT || opts.port);
     process.env.APP_ROOT = appRoot;
     process.env.PORT = port;
+    require('@ds/common');
 
     function rewrite(revMap) {
         return through.obj(function (obj, enc, cb) {
@@ -143,6 +144,10 @@ module.exports = function (gulp, opts) {
             .pipe(tDest('css'));
     });
 
+    var commonGlobalJs = _.uniq([]
+        .concat(require('@ds/common/external.json'))
+        .concat(opts.commonjs)
+        .filter(Boolean));
     gulp.task('build-js', ['build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
         var files = cccglob.sync('ccc/*/js/main/**/*.js').map(require.resolve);
@@ -156,13 +161,28 @@ module.exports = function (gulp, opts) {
                 }))
                 .pipe($.factorBundle({
                     b: (function() {
+                        var removeExternalDeps = through.obj(function (row, enc, done) {
+                            row.deps = _.transform(row.deps, function (result, dep, key) {
+                                if (dep) { // only add back if it's not false (which indicates the dep is external)
+                                    result[key] = dep;
+                                }
+                            });
+                            this.push(row);
+                            done();
+                        });
                         var b = new browserify();
+                        b.external(commonGlobalJs)
+                        b.pipeline.get('deps').push(removeExternalDeps);
                         b.on('reset', function () {
+                            b.external(commonGlobalJs)
+                            b.pipeline.get('deps').push(removeExternalDeps);
+        console.log(2);
                             if (!b.transformPatched) {
                                 b.transform(partialify).transform(es3ify);
                                 b.transformPatched = true;
                             }
                         });
+                        return b;
                     }()),
                     alterPipeline: function alterPipeline(pipeline, b) {
                         if (!b.transformPatched) {
