@@ -212,7 +212,8 @@ module.exports = function (gulp, opts) {
             src([
                 './node_modules/@ccc/*/js/**/*.js',
                 './ccc/*/js/**/*.js',
-                '!**/js/main/**'
+                '!**/js/main/**',
+                '!**/js/lib/**',
             ])
                 .pipe(tReplaceCcc())
         )
