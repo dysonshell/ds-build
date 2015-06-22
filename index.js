@@ -148,6 +148,17 @@ module.exports = function (gulp, opts) {
         .concat(require('@ds/common/external.json'))
         .concat(opts.commonjs)
         .filter(Boolean));
+    function removeExternalDeps() {
+        return through.obj(function (row, enc, done) {
+            row.deps = _.transform(row.deps, function (result, dep, key) {
+                if (dep) { // only add back if it's not false (which indicates the dep is external)
+                    result[key] = dep;
+                }
+            });
+            this.push(row);
+            done();
+        })
+    }
     gulp.task('build-js', ['build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
         var files = cccglob.sync('ccc/*/js/main/**/*.js').map(require.resolve);
@@ -161,25 +172,15 @@ module.exports = function (gulp, opts) {
                 }))
                 .pipe($.factorBundle({
                     b: (function() {
-                        var removeExternalDeps = through.obj(function (row, enc, done) {
-                            row.deps = _.transform(row.deps, function (result, dep, key) {
-                                if (dep) { // only add back if it's not false (which indicates the dep is external)
-                                    result[key] = dep;
-                                }
-                            });
-                            this.push(row);
-                            done();
-                        });
                         var b = new browserify();
                         b.external(commonGlobalJs)
-                        b.pipeline.get('deps').push(removeExternalDeps);
+                        b.pipeline.get('deps').splice(1, 0, removeExternalDeps());
                         b.on('reset', function () {
-                            b.external(commonGlobalJs)
-                            b.pipeline.get('deps').push(removeExternalDeps);
-        console.log(2);
-                            if (!b.transformPatched) {
-                                b.transform(partialify).transform(es3ify);
-                                b.transformPatched = true;
+                            this.external(commonGlobalJs)
+                            this.pipeline.get('deps').splice(1, 0, removeExternalDeps());
+                            if (!this.transformPatched) {
+                                this.transform(partialify).transform(es3ify);
+                                this.transformPatched = true;
                             }
                         });
                         return b;
