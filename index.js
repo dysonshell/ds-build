@@ -99,6 +99,15 @@ module.exports = function (gulp, opts) {
         });
     }
 
+    function tReplaceTmp() {
+        return through.obj(function (file, enc, done) {
+            file.base = file.base.replace('/ccc/tmp/', '/ccc/');
+            file.path = file.path.replace('/ccc/tmp/', '/ccc/');
+            this.push(file);
+            done();
+        });
+    }
+
     gulp.task('reset-rev-menifest', function () {
         var stream = $.file('rev.json', '{}');
         var d = stream.pipe(dest('dist'));
@@ -114,31 +123,12 @@ module.exports = function (gulp, opts) {
     });
 
     function sCss() {
-        return src(['./node_modules/@ccc/*/css/**/*.css', './ccc/*/css/**/*.css']).pipe(tReplaceCcc());
+        return src(['./ccc/tmp/*/css/**/*.css']).pipe(tReplaceTmp());
     }
 
     gulp.task('build-css', ['build-assets'], function () {
-        return es.merge(
-            sCss(),
-            sCss()
-                .pipe(through.obj(function (file, enc, done) {
-                    console.log('trying to remove media-queries for: ' + file.path);
-                    this.push(file);
-                    done();
-                }))
-                .pipe(through.obj(function (file, enc, done) {
-                    file.contents = new Buffer(mqRemove(file.contents.toString('utf8'), {
-                        width: '1024px'
-                    }));
-                    this.push(file);
-                    done();
-                }))
-                .pipe($.minifyCss({compatibility: 'ie8'}))
-                .pipe($.rename({
-                    suffix: '.nmq',
-                    extname: '.css'
-                }))
-        )
+        require('./precss');
+        return sCss()
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
             .pipe(tDest('css'));
