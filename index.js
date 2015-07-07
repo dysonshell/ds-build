@@ -168,6 +168,7 @@ module.exports = function (gulp, opts) {
                         b.on('reset', function () {
                             this.external(commonGlobalJs)
                             this.pipeline.get('deps').splice(1, 0, removeExternalDeps());
+                            this.pipeline.get('dedupe').splice(0, 1);
                             if (!this.transformPatched) {
                                 this.transform(partialify).transform(es3ify);
                                 this.transformPatched = true;
