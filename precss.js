@@ -71,7 +71,7 @@ _.each(replaced, function (obj, fpath) {
     mkdirp.sync(path.dirname(wpath));
     fs.writeFileSync(wpath, obj.contents, 'utf8');
     fs.writeFileSync(wpath.replace(/\.css$/, '.nmq.css'), mqRemove(obj.parsed, {
-        width: '1024px'
+        width: '1200px'
     }), 'utf8');
 });
 console.log('css @import replace done');
