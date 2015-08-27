@@ -18,6 +18,7 @@ var mqRemove = require('mq-remove');
 var browserify = require('browserify');
 var partialify = require('partialify');
 var es3ify = require('es3ify-safe');
+var grtrequire = require('grtrequire');
 var semver = require('semver');
 var dsWatchifyVersion = require('@ds/watchify/package.json').version;
 var dsNrequireVersion = require('@ds/nrequire/package.json').version;
@@ -169,16 +170,15 @@ module.exports = function (gulp, opts) {
                             this.external(commonGlobalJs)
                             this.pipeline.get('deps').splice(1, 0, removeExternalDeps());
                             this.pipeline.get('dedupe').splice(0, 1);
-                            if (!this.transformPatched) {
-                                this.transform(partialify).transform(es3ify);
-                                this.transformPatched = true;
-                            }
                         });
                         return b;
                     }()),
                     alterPipeline: function alterPipeline(pipeline, b) {
                         if (!b.transformPatched) {
-                            b.transform(partialify).transform(es3ify);
+                            b
+                                .transform(grtrequire, {global: true})
+                                .transform(partialify, {global: true})
+                                .transform(es3ify, {global: true});
                             b.transformPatched = true;
                         }
                         pipeline.get('pack')
