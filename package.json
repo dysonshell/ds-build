@@ -1,6 +1,6 @@
 {
   "name": "@ds/build",
-  "version": "5.0.4",
+  "version": "5.1.0",
   "description": "CreditCloud 通用 build 工具",
   "files": [
     "precss.js",
