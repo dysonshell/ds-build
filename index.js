@@ -163,7 +163,9 @@ module.exports = function (gulp, opts) {
                 }))
                 .pipe($.factorBundle({
                     b: (function() {
-                        var b = new browserify();
+                        var b = new browserify({
+                            detectGlobals: false,
+                        });
                         b.external(commonGlobalJs)
                         b.pipeline.get('deps').splice(1, 0, removeExternalDeps());
                         b.on('reset', function () {
