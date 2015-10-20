@@ -17,6 +17,7 @@ var exec = require('child_process').exec;
 var mqRemove = require('mq-remove');
 var browserify = require('browserify');
 var partialify = require('partialify');
+var babelify = require('babelify');
 var es3ify = require('es3ify-safe');
 var grtrequire = require('grtrequire');
 var semver = require('semver');
@@ -180,6 +181,10 @@ module.exports = function (gulp, opts) {
                             b
                                 .transform(grtrequire, {global: true})
                                 .transform(partialify, {global: true})
+                                .transform(babelify.configure({
+                                    optional: ["es7.functionBind"],
+                                    only: /ccc\//,
+                                }), {global: true})
                                 .transform(es3ify, {global: true});
                             b.transformPatched = true;
                         }
