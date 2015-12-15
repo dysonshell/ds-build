@@ -4,7 +4,9 @@ var path = require('path');
 var assert = require('assert');
 var config = require('config');
 assert(config.dsAppRoot);
+var Readable = require('stream').Readable;
 var $ = require('gulp-load-plugins')();
+require('ds-nrequire');
 require('ds-brequire');
 var bpack = require('browser-pack');
 var xtend = require('xtend');
@@ -23,6 +25,11 @@ var babelify = require('babelify');
 var es3ify = require('es3ify-safe');
 var grtrequire = require('grtrequire');
 var semver = require('semver');
+var _ = require('lodash');
+var VFile = require('vinyl');
+var Promise = require('bluebird');
+var dsWatchify = require('ds-watchify');
+var co = require('co');
 
 // config
 var APP_ROOT = config.dsAppRoot;
@@ -138,10 +145,20 @@ module.exports = function (gulp, opts) {
             .pipe(tDest('css'));
     });
 
-    var commonGlobalJs = _.uniq([]
-        .concat(require('@ds/common/external.json'))
-        .concat(opts.commonjs)
-        .filter(Boolean));
+    var globalLibsPath = path.join(APP_ROOT, DSC, 'libs.json');
+    if (!fs.existsSync(globalLibsPath)) {
+        fs.writeFileSync(globalLibsPath, '[]', 'utf-8');
+    }
+    var globalLibs = JSON.parse(fs.readFileSync(globalLibsPath, 'utf-8'));
+    var globalExternals = globalLibs.map(function (x) {
+        return x[1] || x[0];
+    }).filter(Boolean);
+
+    var globalPreloadPath = path.join(APP_ROOT, DSC, 'preload.js');
+    if (!fs.existsSync(globalPreloadPath)) {
+        fs.writeFileSync(globalPreloadPath, '', 'utf-8');
+    }
+
     function removeExternalDeps() {
         return through.obj(function (row, enc, done) {
             row.deps = _.transform(row.deps, function (result, dep, key) {
@@ -153,10 +170,30 @@ module.exports = function (gulp, opts) {
             done();
         })
     }
-    gulp.task('build-js', ['build-css'], function () {
+    var globalSrc;
+    gulp.task('build-global-js', function () {
+        return co(function *() {
+            globalSrc =
+            (yield dsWatchify.bundle(globalPreloadPath, {
+                watch: false,
+                preludeSync: true,
+            })).toString() + '\n;' +
+            (yield dsWatchify.bundle(false, {
+                global: true,
+                watch: false,
+                alterb: function (b) {
+                    globalLibs.forEach(function (x) {
+                        b.require(x[0], {expose: x[1] || x[0]});
+                    });
+                },
+            })).toString();
+            console.log(globalSrc.length);
+        });
+    });
+    gulp.task('build-js', ['build-global-js', 'build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
         var files = dsGlob.sync(DSC+'*/js/main/**/*.js').map(require.resolve);
-        var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/'+DSC+'global.js'), 'utf8');
+        //var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/'+DSC+'global.js'), 'utf8');
         return es.merge(
             src(files)
                 .pipe(through.obj(function (file, enc, done) {
@@ -169,10 +206,10 @@ module.exports = function (gulp, opts) {
                         var b = new browserify({
                             detectGlobals: false,
                         });
-                        b.external(commonGlobalJs)
+                        b.external(globalExternals)
                         b.pipeline.get('deps').splice(1, 0, removeExternalDeps());
                         b.on('reset', function () {
-                            this.external(commonGlobalJs)
+                            this.external(globalExternals)
                             this.pipeline.get('deps').splice(1, 0, removeExternalDeps());
                             this.pipeline.get('dedupe').splice(0, 1);
                         });
@@ -201,16 +238,35 @@ module.exports = function (gulp, opts) {
                     commonJsPath: DSC+'common.js' //"node_modules" will be removed
                 }))
                 .pipe(tReplaceDsc())
-                /*
                 .pipe(through.obj(function (file, enc, done) {
                     if (file.path === path.join(APP_ROOT, DSC+'common.js')) {
-                        var contents = file.contents.toString('utf8');
-                        file.contents = new Buffer(globalJsSrc + contents);
+                        console.log('----- -----');
+                        console.log(Object.keys(file));
+                        console.log(file.cwd);
+                        console.log(file.base);
+                        console.log(file.path);
+                        console.log(file.stat);
+                        console.log('----- -----');
+                        /*
+                            var contents = file.contents.toString('utf8');
+                            file.contents = new Buffer(globalJsSrc + contents);
+                            */
+                        this.push(new VFile({
+                            cwd: file.cwd,
+                            base: file.base,
+                            path: file.path.replace(/common\.js$/, 'global.js'),
+                            contents: new Buffer(globalSrc, 'utf-8'),
+                        }));
+                        this.push(new VFile({
+                            cwd: file.cwd,
+                            base: file.base,
+                            path: file.path.replace(/common\.js$/, 'global-common.js'),
+                            contents: new Buffer(globalSrc.replace(/\[\]\)([\r\n\s]+\/\/#\s+sourceMapping)/, '[false])$1') + ';' + file.contents.toString(), 'utf-8'),
+                        }));
                     }
                     this.push(file);
                     done();
                 })),
-                */
             src([
                 './node_modules/@'+DSC+'*/js/**/*.js',
                 './'+DSC+'*/js/**/*.js',
@@ -259,4 +315,4 @@ module.exports = function (gulp, opts) {
             watch: ['config', 'index.js'],
         });
     });
-});
+};

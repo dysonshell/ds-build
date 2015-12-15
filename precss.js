@@ -3,10 +3,13 @@ var path = require('path');
 var fs = require('fs');
 var mkdirp = require('mkdirp');
 var mqRemove = require('mq-remove');
+require('ds-nrequire');
 var dsGlob = require('ds-glob');
 var assert = require('assert');
 var config = require('config');
 assert(config.dsAppRoot);
+var _ = require('lodash');
+
 // config
 var APP_ROOT = config.dsAppRoot;
 var DSC = config.dsComponentPrefix || 'dsc';
@@ -75,7 +78,7 @@ var replaced = _.transform(allParsed, function (r, obj, fpath) {
 });
 _.each(replaced, function (obj, fpath) {
     var wpath = path.join(APP_ROOT, DSC+'.tmp',
-        fpath.replace(new RegExp('^\\\/?'+DSCns+'\\\/', ''));
+        fpath.replace(new RegExp('^\\\/?'+DSCns+'\\\/'), ''));
     mkdirp.sync(path.dirname(wpath));
     fs.writeFileSync(wpath, obj.contents, 'utf8');
     fs.writeFileSync(wpath.replace(/\.css$/, '.nmq.css'), mqRemove(obj.parsed, {
