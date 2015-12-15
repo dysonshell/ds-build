@@ -1,13 +1,20 @@
 'use strict';
 var path = require('path');
 var fs = require('fs');
-require('@ds/common');
-require('@ds/nrequire');
 var mkdirp = require('mkdirp');
 var mqRemove = require('mq-remove');
-var cccglob = require('@ds/cccglob');
+var dsGlob = require('ds-glob');
+var assert = require('assert');
+var config = require('config');
+assert(config.dsAppRoot);
+// config
+var APP_ROOT = config.dsAppRoot;
+var DSC = config.dsComponentPrefix || 'dsc';
+var DSCns = DSC.replace(/^\/+/, '').replace(/\/+$/, '');
+DSC = DSCns + '/';
+
 var css = require('css');
-var list = cccglob.sync('ccc/*/css/**/*.css');
+var list = dsGlob.sync(DSC+'*/css/**/*.css');
 // console.log(list);
 var allParsed = {};
 _.each(list, function (rpath) {
@@ -39,9 +46,9 @@ var replaced = _.transform(allParsed, function (r, obj, fpath) {
         var i, rule;
         for (i = 0; i < parsed.rules.length; i++) {
             rule = parsed.rules[i];
-            var cccReg = /(?:url\()?['"]?(\/ccc\/[^\/]+\/css\/.+\.css)['"]?\)?/
+            var dscReg = new RegExp('(?:url\\()?[\'"]?(\\\/'+DSCns+'\\\/[^\\\/]+\\\/css\\\/.+\\.css)[\'"]?\\)?');
             var match, ipath;
-            if (rule.type !== 'import' || (!(match = rule.import.match(cccReg)))) {
+            if (rule.type !== 'import' || (!(match = rule.import.match(dscReg)))) {
                 continue;
             }
             ipath = match[1];
@@ -67,7 +74,8 @@ var replaced = _.transform(allParsed, function (r, obj, fpath) {
     }
 });
 _.each(replaced, function (obj, fpath) {
-    var wpath = path.join(APP_ROOT, 'ccc/tmp', fpath.replace(/^\/?ccc\//, ''));
+    var wpath = path.join(APP_ROOT, DSC+'.tmp',
+        fpath.replace(new RegExp('^\\\/?'+DSCns+'\\\/', ''));
     mkdirp.sync(path.dirname(wpath));
     fs.writeFileSync(wpath, obj.contents, 'utf8');
     fs.writeFileSync(wpath.replace(/\.css$/, '.nmq.css'), mqRemove(obj.parsed, {

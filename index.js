@@ -1,16 +1,18 @@
 'use strict';
 var fs = require('fs');
 var path = require('path');
+var assert = require('assert');
+var config = require('config');
+assert(config.dsAppRoot);
 var $ = require('gulp-load-plugins')();
+require('ds-brequire');
 var bpack = require('browser-pack');
-var dsAssets = require('@ds/assets');
 var xtend = require('xtend');
 var through = require('through2');
 var es = require('event-stream');
 var streamCombine = require('stream-combiner');
-var dsRewriter = require('@ds/rewriter');
-var cccglob = require('@ds/cccglob');
-var dsWatchify = require('@ds/watchify');
+var dsRewriter = require('ds-rewriter');
+var dsGlob = require('ds-glob');
 var del = require('del');
 var vinylPaths = require('vinyl-paths');
 var exec = require('child_process').exec;
@@ -21,19 +23,19 @@ var babelify = require('babelify');
 var es3ify = require('es3ify-safe');
 var grtrequire = require('grtrequire');
 var semver = require('semver');
-var dsWatchifyVersion = require('@ds/watchify/package.json').version;
-var dsNrequireVersion = require('@ds/nrequire/package.json').version;
+
+// config
+var APP_ROOT = config.dsAppRoot;
+var DSC = config.dsComponentPrefix || 'dsc';
+var DSCns = DSC.replace(/^\/+/, '').replace(/\/+$/, '');
+DSC = DSCns + '/';
+var port = parseInt(process.env.PORT, 10) || config.port || 4000;
+process.env.APP_ROOT = APP_ROOT;
+process.env.PORT = ''+port;
 
 module.exports = function (gulp, opts) {
 
-    var appRoot = opts.appRoot;
-    GLOBAL.APP_ROOT = appRoot;
-    require('@ds/nrequire');
-    require('@ds/brequire');
     var port = Number(process.env.PORT || opts.port);
-    process.env.APP_ROOT = appRoot;
-    process.env.PORT = port;
-    require('@ds/common');
 
     function rewrite(revMap) {
         return through.obj(function (obj, enc, cb) {
@@ -45,14 +47,14 @@ module.exports = function (gulp, opts) {
 
     function src(glob, opts) {
         var xopts = {
-            cwd: appRoot
+            cwd: APP_ROOT
         };
         opts = opts ? xtend(xopts, opts) : xopts;
         return gulp.src.call(gulp, glob, opts);
     }
 
     function dest() {
-        var destPath = path.join.apply(path, [appRoot].concat([].slice.call(
+        var destPath = path.join.apply(path, [APP_ROOT].concat([].slice.call(
             arguments)));
         return gulp.dest(destPath);
     }
@@ -60,7 +62,7 @@ module.exports = function (gulp, opts) {
     function tRev(prefix) {
         return streamCombine(
             through.obj(function (obj, enc, cb) {
-                obj.base = prefix ? path.join(appRoot, prefix) : appRoot;
+                obj.base = prefix ? path.join(APP_ROOT, prefix) : APP_ROOT;
                 this.push(obj);
                 cb();
             }),
@@ -69,7 +71,7 @@ module.exports = function (gulp, opts) {
     }
 
     function tDest() {
-        var fullRevPath = path.join(appRoot, 'dist', 'rev.json');
+        var fullRevPath = path.join(APP_ROOT, 'dist', 'rev.json');
         return streamCombine(
             dest('dist'), // write revisioned assets to /dist
             through.obj(function (obj, enc, cb) {
@@ -79,8 +81,8 @@ module.exports = function (gulp, opts) {
             }),
             $.rev.manifest(fullRevPath, {
                 path: fullRevPath,
-                base: path.join(appRoot, 'dist'),
-                cwd: appRoot,
+                base: path.join(APP_ROOT, 'dist'),
+                cwd: APP_ROOT,
                 merge: true
             }), // generate a revision manifest file
             through.obj(function (obj, enc, cb) {
@@ -92,10 +94,10 @@ module.exports = function (gulp, opts) {
         );
     }
 
-    function tReplaceCcc() {
+    function tReplaceDsc() {
         return through.obj(function (file, enc, done) {
-            file.base = file.base.replace('/node_modules/@ccc', '/ccc');
-            file.path = file.path.replace('/node_modules/@ccc', '/ccc');
+            file.base = file.base.replace('/node_modules/@'+DSC, '/'+DSC);
+            file.path = file.path.replace('/node_modules/@'+DSC, '/'+DSC);
             this.push(file);
             done();
         });
@@ -103,8 +105,8 @@ module.exports = function (gulp, opts) {
 
     function tReplaceTmp() {
         return through.obj(function (file, enc, done) {
-            file.base = file.base.replace('/ccc/tmp/', '/ccc/');
-            file.path = file.path.replace('/ccc/tmp/', '/ccc/');
+            file.base = file.base.replace('/'+DSC+'.tmp/', '/'+DSC);
+            file.path = file.path.replace('/'+DSC+'.tmp/', '/'+DSC);
             this.push(file);
             done();
         });
@@ -118,20 +120,20 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('build-assets', ['reset-rev-menifest'], function () {
-        return src(['./node_modules/@ccc/*/img/**/*', './ccc/*/img/**/*'])
-            .pipe(tReplaceCcc())
+        return src(['./node_modules/@'+DSC+'*/img/**/*', './'+DSC+'*/img/**/*'])
+            .pipe(tReplaceDsc())
             .pipe(tRev())
             .pipe(tDest());
     });
 
     function sCss() {
-        return src(['./ccc/tmp/*/css/**/*.css']).pipe(tReplaceTmp());
+        return src(['./'+DSC+'.tmp/*/css/**/*.css']).pipe(tReplaceTmp());
     }
 
     gulp.task('build-css', ['build-assets'], function () {
         require('./precss');
         return sCss()
-            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
+            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
             .pipe(tDest('css'));
     });
@@ -153,8 +155,8 @@ module.exports = function (gulp, opts) {
     }
     gulp.task('build-js', ['build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
-        var files = cccglob.sync('ccc/*/js/main/**/*.js').map(require.resolve);
-        var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/ccc/global.js'), 'utf8');
+        var files = dsGlob.sync(DSC+'*/js/main/**/*.js').map(require.resolve);
+        var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/'+DSC+'global.js'), 'utf8');
         return es.merge(
             src(files)
                 .pipe(through.obj(function (file, enc, done) {
@@ -183,7 +185,7 @@ module.exports = function (gulp, opts) {
                                 .transform(partialify, {global: true})
                                 .transform(babelify.configure({
                                     optional: ["es7.functionBind"],
-                                    only: /ccc\//,
+                                    only: new RegExp(DSCns + '\\\/'),
                                 }), {global: true})
                                 .transform(es3ify, {global: true});
                             b.transformPatched = true;
@@ -195,27 +197,29 @@ module.exports = function (gulp, opts) {
                                 prelude: bcp
                             })));
                     },
-                    basedir: appRoot,
-                    commonJsPath: 'ccc/global.js' //"node_modules" will be removed
+                    basedir: APP_ROOT,
+                    commonJsPath: DSC+'common.js' //"node_modules" will be removed
                 }))
-                .pipe(tReplaceCcc())
+                .pipe(tReplaceDsc())
+                /*
                 .pipe(through.obj(function (file, enc, done) {
-                    if (file.path === path.join(appRoot, 'ccc/global.js')) {
+                    if (file.path === path.join(APP_ROOT, DSC+'common.js')) {
                         var contents = file.contents.toString('utf8');
                         file.contents = new Buffer(globalJsSrc + contents);
                     }
                     this.push(file);
                     done();
                 })),
+                */
             src([
-                './node_modules/@ccc/*/js/**/*.js',
-                './ccc/*/js/**/*.js',
+                './node_modules/@'+DSC+'*/js/**/*.js',
+                './'+DSC+'*/js/**/*.js',
                 '!**/js/main/**',
                 '!**/js/lib/**',
             ])
-                .pipe(tReplaceCcc())
+                .pipe(tReplaceDsc())
         )
-            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(appRoot, 'dist', 'rev.json'), 'utf-8'))))
+            .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
             .pipe(through.obj(function (file, enc, done) {
                 console.log('trying to uglify js file: ' + file.path);
@@ -243,31 +247,16 @@ module.exports = function (gulp, opts) {
     });
 
     gulp.task('dev', function () {
-        var watchifyServerPath;
-        try {
-            watchifyServerPath = require.resolve('@ds/watchify/server.js');
-        } catch (e) {}
-        if (watchifyServerPath) {
-            var rpath = path.relative(appRoot, require.resolve('@ds/watchify/server.js'));
-            $.supervisor(watchifyServerPath, {
-                cwd: path.dirname(watchifyServerPath),
-                ext: ['js'],
-                watch: [rpath],
-            });
-        } else {
-            dsWatchify(opts).listen();
-        }
-        var supervisorOptions = {
-            ext: ['json', 'js'],
-            args: ['--run-by-gulp'],
-        }
-        if (semver.gte(dsNrequireVersion, '1.3.0')) {
-            supervisorOptions.watch = ['config', 'index.js'];
-            // 其他所有文件都会在改动后 process.exit(0); 这样触发重启
-        } else {
-            supervisorOptions.ignore = ['node_modules', 'assets'];
-        }
-        $.supervisor(path.join(appRoot, 'index.js'), supervisorOptions);
-    });
+        var watchifyServerPath = require.resolve('ds-watchify/server.js');
+        var rpath = path.relative(APP_ROOT, watchifyServerPath);
+        $.supervisor(watchifyServerPath, {
+            ext: ['js'],
+            watch: [rpath],
+        });
 
-};
+        $.supervisor(path.join(APP_ROOT, 'index.js'), {
+            ext: ['json', 'js'],
+            watch: ['config', 'index.js'],
+        });
+    });
+});
