@@ -1,6 +1,6 @@
 {
   "name": "ds-build",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "DysonShell build 工具",
   "files": [
     "precss.js",
