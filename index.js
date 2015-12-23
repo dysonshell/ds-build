@@ -7,14 +7,14 @@ assert(config.dsAppRoot);
 var Readable = require('stream').Readable;
 var $ = require('gulp-load-plugins')();
 require('ds-nrequire');
-require('ds-brequire');
+// require('ds-brequire');
 var bpack = require('browser-pack');
 var xtend = require('xtend');
 var through = require('through2');
 var es = require('event-stream');
 var streamCombine = require('stream-combiner');
 var dsRewriter = require('ds-rewriter');
-var dsGlob = require('ds-glob');
+var glob = require('glob');
 var del = require('del');
 var vinylPaths = require('vinyl-paths');
 var exec = require('child_process').exec;
@@ -30,6 +30,15 @@ var VFile = require('vinyl');
 var Promise = require('bluebird');
 var dsWatchify = require('ds-watchify');
 var co = require('co');
+var mkdirp = require('mkdirp');
+
+var unary = require('fn-unary');
+var watch = require('gulp-watch');
+var babel = require('gulp-babel');
+var plumber = require('gulp-plumber');
+var notify = require('gulp-notify');
+var rimraf = require('rimraf');
+var nodemon = require('gulp-nodemon');
 
 // config
 var APP_ROOT = config.dsAppRoot;
@@ -39,6 +48,11 @@ DSC = DSCns + '/';
 var port = parseInt(process.env.PORT, 10) || config.port || 4000;
 process.env.APP_ROOT = APP_ROOT;
 process.env.PORT = ''+port;
+var searchPrefix = config.dsSearchPrefix.map(p => {
+    if (typeof p !== 'string') return false;
+    if (p.match(/[-\/]$/)) return p;
+    return p + '/';
+}).filter(Boolean);
 
 module.exports = function (gulp, opts) {
 
@@ -53,10 +67,11 @@ module.exports = function (gulp, opts) {
     }
 
     function src(glob, opts) {
+        opts = opts || {};
         var xopts = {
-            cwd: APP_ROOT
+            cwd: APP_ROOT,
         };
-        opts = opts ? xtend(xopts, opts) : xopts;
+        opts = xtend(xopts, opts);
         return gulp.src.call(gulp, glob, opts);
     }
 
@@ -66,13 +81,17 @@ module.exports = function (gulp, opts) {
         return gulp.dest(destPath);
     }
 
+    function tBase(prefix) {
+        return through.obj(function (obj, enc, cb) {
+            obj.base = prefix ? path.join(APP_ROOT, prefix) : APP_ROOT;
+            this.push(obj);
+            cb();
+        });
+    }
+
     function tRev(prefix) {
         return streamCombine(
-            through.obj(function (obj, enc, cb) {
-                obj.base = prefix ? path.join(APP_ROOT, prefix) : APP_ROOT;
-                this.push(obj);
-                cb();
-            }),
+            tBase(prefix),
             $.rev()
         );
     }
@@ -112,12 +131,93 @@ module.exports = function (gulp, opts) {
 
     function tReplaceTmp() {
         return through.obj(function (file, enc, done) {
-            file.base = file.base.replace('/'+DSC+'.tmp/', '/'+DSC);
-            file.path = file.path.replace('/'+DSC+'.tmp/', '/'+DSC);
+            file.base = file.base.replace('/.tmp/'+DSC, '/'+DSC);
+            file.path = file.path.replace('/.tmp/'+DSC, '/'+DSC);
+            file.base = file.base.replace('/.tmp/', '/');
+            file.path = file.path.replace('/.tmp/', '/');
             this.push(file);
             done();
         });
     }
+
+    function errorAlert(error){
+        notify.onError({
+            title: "Gulp ERROR!",
+            message: 'see terminal for details.',
+            sound: "Sosumi",
+        })(error); //Error Notification
+        console.log(error.toString());//Prints Error to Console
+        //this.emit("end"); //End function
+    };
+
+    gulp.task('rimraf', function (cb) {
+        rimraf('./.tmp/', function () {
+            var pkgpath = path.join(APP_ROOT, '.tmp', 'package.json');
+            mkdirp.sync(path.dirname(pkgpath));
+            // fs.writeFileSync(pkgpath, '{}', 'utf-8');
+            cb();
+        });
+    });
+
+    var njsfiles = [].concat.apply(
+            ['!' + path.join(searchPrefix[0], '.tmp') + '/**/*.js'],
+            searchPrefix.map(p => (p.match(/-$/) ? [] : ['!' + p + 'preload.js']).concat([
+                '!' + p + '*/js/**/*.js',
+                '' + p + '**/*.js',
+            ]))
+        )
+        .reverse();
+    var wnjsfiles = njsfiles.filter(p => !p.match(/^!?node_modules\//)).concat(['**/node_modules/**/*.js']);
+    var bnjsfiles = [
+        '.tmp/**/*.js',
+        '!.tmp/*/js/**/*.js',
+    ];
+
+    var afiles = ['!' + path.join(searchPrefix[0], '.tmp') + '/**/*']
+        .concat(searchPrefix.map(p => '' + p + '**/*'))
+        .reverse();
+    var wafiles = afiles.filter(p => !p.match(/^!?node_modules\//));
+
+    // var bjsfiles = ['!' + path.join(searchPrefix[0], '.tmp') + '/**/*.js']
+    //     .concat(searchPrefix.map(p => '' + p + '*/js/**/*.js'))
+    //     .reverse();
+    // var wbjsfiles = bjsfiles.filter(p => !p.match(/^!?node_modules\//));
+
+    /*
+    gulp.task('prepare-bjs', ['rimraf'], function () {
+        return src(bjsfiles)
+            .pipe(dest('.tmp'))
+            .on('data', function (file) {
+                console.log('- [', file.path, '] copied');
+            })
+    });
+    */
+
+    gulp.task('prepare-assets', ['rimraf'], function () {
+        return src(afiles)
+            .pipe(dest('.tmp', DSC))
+            .on('data', function (file) {
+                console.log('- [', file.path, '] copied');
+            })
+    });
+
+    gulp.task('prepare-njs', ['prepare-assets'], function () {
+        return src(njsfiles)
+            .pipe(babel({
+                presets: [require('babel-preset-dysonshell/node-auto')],
+            }))
+            .pipe(dest('.tmp', DSC))
+            .on('data', function (file) {
+                console.log('- [', file.path, '] babel compiled');
+            })
+    });
+
+    gulp.task('prepare', ['prepare-njs'], function () {
+        return src(['ccc/**', '!ccc/**/*.js']).pipe(tBase())
+            .pipe(src('.tmp/**').pipe(tBase('.tmp')))
+            //.pipe(tReplaceTmp())
+            .pipe(dest('dist'));
+    })
 
     gulp.task('reset-rev-menifest', function () {
         var stream = $.file('rev.json', '{}');
@@ -126,38 +226,36 @@ module.exports = function (gulp, opts) {
         return d;
     });
 
-    gulp.task('build-assets', ['reset-rev-menifest'], function () {
-        return src(['./node_modules/@'+DSC+'*/img/**/*', './'+DSC+'*/img/**/*'])
-            .pipe(tReplaceDsc())
+    var globalLibsPath = path.join(APP_ROOT, '.tmp', DSC, 'libs.json');
+    var globalPreloadPath = path.join(APP_ROOT, '.tmp', DSC, 'preload.js');
+    var globalLibs, globalExternals;
+    gulp.task('build-assets', ['reset-rev-menifest', 'prepare'], function () {
+
+        if (!fs.existsSync(globalLibsPath)) {
+            fs.writeFileSync(globalLibsPath, '[]', 'utf-8');
+        }
+        globalLibs = JSON.parse(fs.readFileSync(globalLibsPath, 'utf-8'));
+        globalExternals = globalLibs.map(function (x) {
+            return x[1] || x[0];
+        }).filter(Boolean);
+
+        if (!fs.existsSync(globalPreloadPath)) {
+            fs.writeFileSync(globalPreloadPath, '', 'utf-8');
+        }
+        return src('.tmp/'+DSC+'*/img/**')
+            .pipe(tReplaceTmp())
             .pipe(tRev())
             .pipe(tDest());
     });
 
-    function sCss() {
-        return src(['./'+DSC+'.tmp/*/css/**/*.css']).pipe(tReplaceTmp());
-    }
-
     gulp.task('build-css', ['build-assets'], function () {
         require('./precss');
-        return sCss()
+        return src(['./.tmp/'+DSC+'*/css/**/*.css'])
+            .pipe(tReplaceTmp())
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
             .pipe(tDest('css'));
     });
-
-    var globalLibsPath = path.join(APP_ROOT, DSC, 'libs.json');
-    if (!fs.existsSync(globalLibsPath)) {
-        fs.writeFileSync(globalLibsPath, '[]', 'utf-8');
-    }
-    var globalLibs = JSON.parse(fs.readFileSync(globalLibsPath, 'utf-8'));
-    var globalExternals = globalLibs.map(function (x) {
-        return x[1] || x[0];
-    }).filter(Boolean);
-
-    var globalPreloadPath = path.join(APP_ROOT, DSC, 'preload.js');
-    if (!fs.existsSync(globalPreloadPath)) {
-        fs.writeFileSync(globalPreloadPath, '', 'utf-8');
-    }
 
     function removeExternalDeps() {
         return through.obj(function (row, enc, done) {
@@ -171,7 +269,7 @@ module.exports = function (gulp, opts) {
         })
     }
     var globalSrc;
-    gulp.task('build-global-js', function () {
+    gulp.task('build-global-js', ['build-assets'], function () {
         return co(function *() {
             globalSrc =
             (yield dsWatchify.bundle(globalPreloadPath, {
@@ -192,7 +290,10 @@ module.exports = function (gulp, opts) {
     });
     gulp.task('build-js', ['build-global-js', 'build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
-        var files = dsGlob.sync(DSC+'*/js/main/**/*.js').map(require.resolve);
+        var files = glob.sync(DSC+'*/js/main/**/*.js', {
+            cwd: path.join(APP_ROOT, '.tmp'),
+        }).map(unary(path.join.bind(path, APP_ROOT, '.tmp')));
+        console.log('files', files);
         //var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/'+DSC+'global.js'), 'utf8');
         return es.merge(
             src(files)
@@ -204,7 +305,9 @@ module.exports = function (gulp, opts) {
                 .pipe($.factorBundle({
                     b: (function() {
                         var b = new browserify({
-                            detectGlobals: false,
+                            detectGlobals: true,
+                            basedir: path.join(APP_ROOT, '.tmp'),
+                            paths: ['.'],
                         });
                         b.external(globalExternals)
                         b.pipeline.get('deps').splice(1, 0, removeExternalDeps());
@@ -221,25 +324,31 @@ module.exports = function (gulp, opts) {
                                 .transform(grtrequire, {global: true})
                                 .transform(partialify, {global: true})
                                 .transform(babelify.configure({
-                                    optional: ["es7.functionBind"],
-                                    only: new RegExp(DSCns + '\\\/'),
+                                    presets: [require('babel-preset-dysonshell')],
                                 }), {global: true})
                                 .transform(es3ify, {global: true});
                             b.transformPatched = true;
                         }
                         pipeline.get('pack')
-                            .splice(0, 1, bpack(xtend(b._options, {
+                            .splice(0, 1,
+                            through.obj(function (row, enc, cb) {
+                                console.log(Object.keys(row));
+                                console.log(_.pick(row, 'file id deps entry expose'.split(' ')));
+                                this.push(row);
+                                cb();
+                            }),
+                            bpack(xtend(b._options, {
                                 raw: true,
                                 hasExports: false,
                                 prelude: bcp
                             })));
                     },
-                    basedir: APP_ROOT,
+                    basedir: path.join(APP_ROOT, '.tmp'),
                     commonJsPath: DSC+'common.js' //"node_modules" will be removed
                 }))
-                .pipe(tReplaceDsc())
+                //.pipe(tReplaceDsc())
                 .pipe(through.obj(function (file, enc, done) {
-                    if (file.path === path.join(APP_ROOT, DSC+'common.js')) {
+                    if (file.path === path.join(APP_ROOT, '.tmp/'+DSC+'common.js')) {
                         console.log('----- -----');
                         console.log(Object.keys(file));
                         console.log(file.cwd);
@@ -266,14 +375,15 @@ module.exports = function (gulp, opts) {
                     }
                     this.push(file);
                     done();
-                })),
+                }))
+                .pipe(tReplaceTmp()),
             src([
                 './node_modules/@'+DSC+'*/js/**/*.js',
                 './'+DSC+'*/js/**/*.js',
                 '!**/js/main/**',
                 '!**/js/lib/**',
             ])
-                .pipe(tReplaceDsc())
+                //.pipe(tReplaceDsc())
         )
             .pipe(rewrite(JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'dist', 'rev.json'), 'utf-8'))))
             .pipe(tRev())
@@ -302,17 +412,57 @@ module.exports = function (gulp, opts) {
             .pipe(vinylPaths(del));
     });
 
-    gulp.task('dev', function () {
-        var watchifyServerPath = require.resolve('ds-watchify/server.js');
-        var rpath = path.relative(APP_ROOT, watchifyServerPath);
-        $.supervisor(watchifyServerPath, {
-            ext: ['js'],
-            watch: [rpath],
-        });
+    gulp.task('dev', ['prepare'], function () {
 
-        $.supervisor(path.join(APP_ROOT, 'index.js'), {
-            ext: ['json', 'js'],
-            watch: ['config', 'index.js'],
-        });
+        watch(wnjsfiles)
+            .on('data', function (file) {
+                console.log('- [', file.path, '] updated');
+            })
+            .pipe(plumber({errorHandler: errorAlert}))
+            .pipe(babel({
+                presets: [require('babel-preset-dysonshell/node-auto')],
+            }))
+            .pipe(dest('.tmp'))
+            .on('data', function (file) {
+                console.log('- [', file.path, '] babel compiled');
+            });
+
+        watch(wafiles)
+            //.pipe(watch(wbjsfiles))
+            .pipe(through.obj(function (file, enc, cb) {
+                if (file.path.match(/\.js$/)) {
+                    console.log(file.base);
+                    console.log(file.path);
+                    if (path.relative(file.base, file.path).match(/\/js\//)) {
+                        this.push(file);
+                    }
+                } else {
+                    this.push(file);
+                }
+                cb();
+            }))
+            .on('data', function (file) {
+                console.log('- [', file.path, '] updated');
+            })
+            .pipe(dest('.tmp'))
+            .on('data', function (file) {
+                console.log('- [', file.path, '] copied');
+            });
+
+        nodemon({
+            verbose: true,
+            script: path.join(APP_ROOT, '.tmp', 'app.js'),
+            watch: [path.join(APP_ROOT, '.tmp')],
+            ignore: ['*/js/**/*.js'],
+            ext: 'js',
+            env: { 'NODE_ENV': 'development' },
+        })
+            .on('crash', function () {
+                errorAlert(new Error('app process crashed'));
+            })
+            .on('quit', function () {
+                process.kill(process.pid, 'SIGTERM');
+            });
+
     });
 };

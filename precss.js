@@ -4,7 +4,7 @@ var fs = require('fs');
 var mkdirp = require('mkdirp');
 var mqRemove = require('mq-remove');
 require('ds-nrequire');
-var dsGlob = require('ds-glob');
+var glob = require('glob');
 var assert = require('assert');
 var config = require('config');
 assert(config.dsAppRoot);
@@ -17,25 +17,23 @@ var DSCns = DSC.replace(/^\/+/, '').replace(/\/+$/, '');
 DSC = DSCns + '/';
 
 var css = require('css');
-var list = dsGlob.sync(DSC+'*/css/**/*.css');
-// console.log(list);
+var list = glob.sync('.tmp/'+DSC+'*/css/**/*.css', {
+    cwd: APP_ROOT,
+});
 var allParsed = {};
 _.each(list, function (rpath) {
-    var obj = allParsed['/' + rpath] = {
-        realPath: require.resolve(rpath)
+    var obj = allParsed[rpath.replace(/\.tmp\//, '/')] = {
+        realPath: path.join(APP_ROOT, rpath),
     };
     obj.contents = fs.readFileSync(obj.realPath, 'utf8');
     obj.parsed = css.parse(obj.contents);
 });
-// console.log('a', allParsed);
 var replaced = _.transform(allParsed, function (r, obj, fpath) {
     var queue = [obj.parsed.stylesheet];
-    // console.log(obj);
     process();
     function process() {
         var parsed;
         while ((parsed = queue.shift())) {
-            // console.log('re', parsed);
             replace(parsed);
         }
     }
@@ -65,10 +63,10 @@ var replaced = _.transform(allParsed, function (r, obj, fpath) {
             replaced[ipath] = 1;
             Array.prototype.splice.apply(parsed.rules, [i, 1, {
                 "type": "comment",
-                "comment": "importing " + ipath + ' from ' + require.resolve(ipath.substring(1)),
+                "comment": " importing '" + ipath + "' from '" + require.resolve(ipath.substring(1)) + "' ",
             }].concat(allParsed[ipath].parsed.stylesheet.rules).concat([{
                 "type": "comment",
-                "comment": "imported " + ipath,
+                "comment": " imported '" + ipath + " '",
             }]));
         }
         queue = queue.concat(parsed.rules.filter(function (rule) {
@@ -77,12 +75,13 @@ var replaced = _.transform(allParsed, function (r, obj, fpath) {
     }
 });
 _.each(replaced, function (obj, fpath) {
-    var wpath = path.join(APP_ROOT, DSC+'.tmp',
-        fpath.replace(new RegExp('^\\\/?'+DSCns+'\\\/'), ''));
+    var wpath = path.join(APP_ROOT, '.tmp', fpath);
     mkdirp.sync(path.dirname(wpath));
     fs.writeFileSync(wpath, obj.contents, 'utf8');
-    fs.writeFileSync(wpath.replace(/\.css$/, '.nmq.css'), mqRemove(obj.parsed, {
-        width: '1200px'
-    }), 'utf8');
+    if (config.dsSupportIE8) {
+        fs.writeFileSync(wpath.replace(/\.css$/, '.nmq.css'), mqRemove(obj.parsed, {
+            width: '1200px'
+        }), 'utf8');
+    }
 });
 console.log('css @import replace done');
