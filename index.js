@@ -29,7 +29,6 @@ var _ = require('lodash');
 var VFile = require('vinyl');
 var Promise = require('bluebird');
 var dsWatchify = require('ds-watchify');
-var co = require('co');
 var mkdirp = require('mkdirp');
 
 var unary = require('fn-unary');
@@ -270,7 +269,7 @@ module.exports = function (gulp, opts) {
     }
     var globalSrc;
     gulp.task('build-global-js', ['build-assets'], function () {
-        return co(function *() {
+        return Promise.coroutine(function *() {
             globalSrc =
             (yield dsWatchify.bundle(globalPreloadPath, {
                 watch: false,
