@@ -278,15 +278,13 @@ module.exports = function (gulp, opts) {
                     });
                 },
             })).toString();
-            console.log(globalSrc.length);
-        });
+        })();
     });
     gulp.task('build-js', ['build-global-js', 'build-css'], function () {
         var bcp = fs.readFileSync(require.resolve('browserify-common-prelude/dist/bcp.min.js'), 'utf-8');
         var files = glob.sync(DSC+'*/js/main/**/*.js', {
             cwd: path.join(APP_ROOT, '.tmp'),
         }).map(unary(path.join.bind(path, APP_ROOT, '.tmp')));
-        console.log('files', files);
         //var globalJsSrc = fs.readFileSync(require.resolve('@ds/common/dist/'+DSC+'global.js'), 'utf8');
         return es.merge(
             src(files)
@@ -325,8 +323,6 @@ module.exports = function (gulp, opts) {
                         pipeline.get('pack')
                             .splice(0, 1,
                             through.obj(function (row, enc, cb) {
-                                console.log(Object.keys(row));
-                                console.log(_.pick(row, 'file id deps entry expose'.split(' ')));
                                 this.push(row);
                                 cb();
                             }),
@@ -342,17 +338,6 @@ module.exports = function (gulp, opts) {
                 //.pipe(tReplaceDsc())
                 .pipe(through.obj(function (file, enc, done) {
                     if (file.path === path.join(APP_ROOT, '.tmp/'+DSC+'common.js')) {
-                        console.log('----- -----');
-                        console.log(Object.keys(file));
-                        console.log(file.cwd);
-                        console.log(file.base);
-                        console.log(file.path);
-                        console.log(file.stat);
-                        console.log('----- -----');
-                        /*
-                            var contents = file.contents.toString('utf8');
-                            file.contents = new Buffer(globalJsSrc + contents);
-                            */
                         this.push(new VFile({
                             cwd: file.cwd,
                             base: file.base,
@@ -397,7 +382,7 @@ module.exports = function (gulp, opts) {
             .pipe(tDest('js', 'node_modules'));
     });
 
-    gulp.task('build-rev', [], function () {
+    gulp.task('build-rev', ['build-js'], function () {
         var revMap = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'dist', 'rev.json')));
         return src(['.tmp/'+DSC+'*/partials/**/*.html', '.tmp/'+DSC+'*/views/**/*.html'])
         // return src(['.tmp/'+DSC+'login/views/**/*.html'])
@@ -455,8 +440,6 @@ module.exports = function (gulp, opts) {
             //.pipe(watch(wbjsfiles))
             .pipe(through.obj(function (file, enc, cb) {
                 if (file.path.match(/\.js$/)) {
-                    console.log(file.base);
-                    console.log(file.path);
                     if (path.relative(file.base, file.path).match(/\/js\//)) {
                         this.push(file);
                     }
