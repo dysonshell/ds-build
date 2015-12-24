@@ -41,6 +41,7 @@
     "es3ify-safe": "^0.1.3",
     "event-stream": "^3.2.1",
     "fn-unary": "^1.0.0",
+    "glob": "^6.0.2",
     "grtrequire": "^1.0.0",
     "gulp": "^3",
     "gulp-babel": "^6.1.1",
