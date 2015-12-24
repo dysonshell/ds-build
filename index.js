@@ -27,6 +27,7 @@ var _ = require('lodash');
 var VFile = require('vinyl');
 var Promise = require('bluebird');
 var dsWatchify = require('ds-watchify');
+var respawn = require('respawn');
 var mkdirp = require('mkdirp');
 
 var unary = require('fn-unary');
@@ -148,12 +149,7 @@ module.exports = function (gulp, opts) {
     };
 
     gulp.task('rimraf', function (cb) {
-        rimraf('./.tmp/', function () {
-            var pkgpath = path.join(APP_ROOT, '.tmp', 'package.json');
-            mkdirp.sync(path.dirname(pkgpath));
-            // fs.writeFileSync(pkgpath, '{}', 'utf-8');
-            cb();
-        });
+        rimraf('./.tmp/', cb);
     });
 
     var njsfiles = [].concat.apply(
@@ -478,6 +474,14 @@ module.exports = function (gulp, opts) {
             });
 
         var tmpAppRoot = path.join(APP_ROOT, '.tmp');
+        respawn([process.execPath, require.resolve('ds-watchify/server.js')], {
+            env: {
+                NODE_ENV: 'development',
+                NODE_CONFIG: '{"dsAppRoot":"'+tmpAppRoot+'"}',
+            },
+            sleep: 0,
+            stdio: 'inherit',
+        }).start();
         nodemon({
             verbose: true,
             script: path.join(tmpAppRoot, 'ccc'),
