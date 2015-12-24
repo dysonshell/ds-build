@@ -431,6 +431,7 @@ module.exports = function (gulp, opts) {
             .pipe(babel({
                 presets: [require('babel-preset-dysonshell/node-auto')],
             }))
+            .pipe(tBase())
             .pipe(dest('.tmp'))
             .on('data', function (file) {
                 console.log('- [', file.path, '] babel compiled');
@@ -451,6 +452,7 @@ module.exports = function (gulp, opts) {
             .on('data', function (file) {
                 console.log('- [', file.path, '] updated');
             })
+            .pipe(tBase())
             .pipe(dest('.tmp'))
             .on('data', function (file) {
                 console.log('- [', file.path, '] copied');
