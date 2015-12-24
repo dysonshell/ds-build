@@ -6,8 +6,6 @@ var config = require('config');
 assert(config.dsAppRoot);
 var Readable = require('stream').Readable;
 var $ = require('gulp-load-plugins')();
-require('ds-nrequire');
-// require('ds-brequire');
 var bpack = require('browser-pack');
 var xtend = require('xtend');
 var through = require('through2');
@@ -166,7 +164,7 @@ module.exports = function (gulp, opts) {
             ]))
         )
         .reverse();
-    var wnjsfiles = njsfiles.filter(p => !p.match(/^!?node_modules\//)).concat(['**/node_modules/**/*.js']);
+    var wnjsfiles = njsfiles.filter(p => !p.match(/\/node_modules\//));
     var bnjsfiles = [
         '.tmp/**/*.js',
         '!.tmp/*/js/**/*.js',
@@ -403,13 +401,44 @@ module.exports = function (gulp, opts) {
             .pipe(tDest('js', 'node_modules'));
     });
 
-    gulp.task('build', ['build-js']);
+    gulp.task('build-rev', [], function () {
+        var revMap = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'dist', 'rev.json')));
+        return src(['.tmp/'+DSC+'*/partials/**/*.html', '.tmp/'+DSC+'*/views/**/*.html'])
+        // return src(['.tmp/'+DSC+'login/views/**/*.html'])
+            .pipe(tBase('.tmp'))
+            .pipe(through.obj(function (file, enc, cb) {
+                var contents = file.contents.toString();
+                console.log('- revving template: ', file.path);
+                if (config.dsSupportIE8) {
+                    contents = contents.replace(/<link[^>]+rel=['"]?stylesheet['"]?[^>]+>/g, function (csslink) {
+                        var nonie8 = dsRewriter(revMap, csslink);
+                        if (nonie8 === csslink) {
+                            return csslink;
+                        }
+                        var ie8 = dsRewriter(revMap, csslink, true);
+                        return '<script>' +
+                            'document.write((typeof window.matchMedia != "undefined" || typeof window.msMatchMedia != "undefined")?' +
+                            '\''+nonie8.replace(/'/g, '"')+'\':'+
+                            '\''+ie8.replace(/'/g, '"')+'\''+
+                            ');</script>';
+                    });
+                }
+                contents = dsRewriter(revMap, contents);
+                file.contents = new Buffer(contents);
+                // file.contents = new Buffer(dsRewriter(revMap, obj.contents.toString('utf-8')));
+                this.push(file);
+                cb();
+            }))
+            .pipe(dest('dist'));
+    });
 
-    gulp.task('build-and-clean', ['build'], function () {
+    gulp.task('build-and-clean', ['build-rev'], function () {
         return src('./dist/**/*')
             .pipe($.revOutdated(5))
             .pipe(vinylPaths(del));
     });
+
+    gulp.task('build', ['build-and-clean']);
 
     gulp.task('dev', ['prepare'], function () {
 
@@ -448,13 +477,17 @@ module.exports = function (gulp, opts) {
                 console.log('- [', file.path, '] copied');
             });
 
+        var tmpAppRoot = path.join(APP_ROOT, '.tmp');
         nodemon({
             verbose: true,
-            script: path.join(APP_ROOT, '.tmp', 'app.js'),
-            watch: [path.join(APP_ROOT, '.tmp')],
+            script: path.join(tmpAppRoot, 'ccc'),
+            watch: [tmpAppRoot],
             ignore: ['*/js/**/*.js'],
             ext: 'js',
-            env: { 'NODE_ENV': 'development' },
+            env: {
+                NODE_ENV: 'development',
+                NODE_CONFIG: '{"dsAppRoot":"'+tmpAppRoot+'"}',
+            },
         })
             .on('crash', function () {
                 errorAlert(new Error('app process crashed'));
